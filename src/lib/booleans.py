@@ -3,6 +3,9 @@ try:
     from ..ltc_core import LTCFunction, LTCCheckerFunction, register_function
 except ModuleNotFoundError:
     from ltc_core import LTCFunction, LTCCheckerFunction, register_function
+except ImportError:
+    from ltc_core import LTCFunction, LTCCheckerFunction, register_function
+    
 
 class BooleanParser(FormulaParser):
     operators = {'|': Operator(0, lambda a, b: a or b, name='OR'), 
