@@ -1,6 +1,6 @@
 from .formula_parser import FormulaParser, Operator
 try:
-    from ltc.ltc_core import LTCFunction, LTCCheckerFunction, register_function
+    from ..ltc_core import LTCFunction, LTCCheckerFunction, register_function
 except ModuleNotFoundError:
     from ltc_core import LTCFunction, LTCCheckerFunction, register_function
 

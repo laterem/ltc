@@ -1,7 +1,4 @@
-try:
-    from commons import NotSpecified
-except ModuleNotFoundError:
-    NotSpecified = object()
+NotSpecified = object()
 
 class Operator:
     def __init__(self, priority, function, arity=2, name='no name given'):
