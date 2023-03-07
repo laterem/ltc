@@ -1,15 +1,15 @@
 try:
     from .ltc_builtins import *
     from .ltc_core import *
-    from context_objects import LATEREM_FLAGS, LTC_CheckerShortcuts, LTC_SingleStorage
-    from context_objects import LTC_DEFAULT_EXPORT_VALUE, LTC_DEFAULT_INPUT_VALUE
+    #from context_objects import LATEREM_FLAGS, LTC_CheckerShortcuts, LTC_SingleStorage
+    #from context_objects import LTC_DEFAULT_EXPORT_VALUE, LTC_DEFAULT_INPUT_VALUE
 except ImportError:
     from ltc_builtins import *
     from ltc_core import *
-    LTC_CheckerShortcuts = LTC_SingleStorage = True
-    LATEREM_FLAGS = {True}
-    LTC_DEFAULT_EXPORT_VALUE = '0'
-    LTC_DEFAULT_INPUT_VALUE = '0'
+    #LTC_CheckerShortcuts = LTC_SingleStorage = True
+    #LATEREM_FLAGS = {True}
+    #LTC_DEFAULT_EXPORT_VALUE = '0'
+    #LTC_DEFAULT_INPUT_VALUE = '0'
 
 VERSION = 0.5
 RECOMPILATION_ATTEMPTS = 100
@@ -97,7 +97,8 @@ class LTC:
             mainobj['forbidders'].append(checkerobj)
         return mainobj
     
-    def execute(self, extend_ns=None, metadata=None, timeout=RECOMPILATION_ATTEMPTS):
+    def execute(self, extend_ns=None, metadata=None, timeout=RECOMPILATION_ATTEMPTS,
+                default_export_value='0',):
         try:
             if metadata is None:    
                 metadata = LTCFakeMetadata()
@@ -112,9 +113,9 @@ class LTC:
             new_forbidden_cases = []
 
             for field in self.exporting_fields:
-                new_field_table[field] = LTC_DEFAULT_EXPORT_VALUE
+                new_field_table[field] = default_export_value
             for field in self.known_input_fields:
-                new_field_table[field] = LTC_DEFAULT_INPUT_VALUE
+                new_field_table[field] = default_export_value
             
             new_field_table.update(extend_ns)
             
@@ -223,16 +224,13 @@ class LTCCompiler:
             kws[i] = None
         kws[origin] = ff
 
-    def compile(self, txt):
+    def compile(self, txt, 
+                use_equal_shortcut=True):
         COMPILER_VERSION = 0.5
         if COMPILER_VERSION != VERSION:
             raise NotImplemented
 
-        if LTC_SingleStorage in LATEREM_FLAGS:
-            namespace = field_table = {}
-        else:
-            namespace = {}
-            field_table = {}
+        namespace = {}
         exported_fields = set()
         checker_functions = []
         forbidden_cases = []
@@ -274,7 +272,7 @@ class LTCCompiler:
                         field = field[1:].strip()
                         exported_fields.add(field)
 
-                    field_table[field] = value
+                    namespace[field] = value
                     if 'as' in kws:
                         allias = kws[kws.index('as') + 1]
                         namespace[allias] = value
@@ -286,7 +284,7 @@ class LTCCompiler:
                     function = LTCCompiler._build_func(kws[1])
                     
                     if not function._is_checker:
-                        if LTC_CheckerShortcuts in LATEREM_FLAGS:
+                        if use_equal_shortcut:
                             function = IsEqual(function)
                         else:
                             raise LTCCompileError(kws[1] + 'cannot be a Checker Function in: ' + line)
@@ -304,7 +302,7 @@ class LTCCompiler:
                     function = LTCCompiler._build_func(kws[1])
                     
                     if not function._is_checker:
-                        if LTC_CheckerShortcuts in LATEREM_FLAGS:
+                        if use_equal_shortcut:
                             function = IsEqual(function)
                         else:
                             raise LTCCompileError(kws[1] + 'cannot be a Checker Function in: ' + line)
@@ -315,7 +313,7 @@ class LTCCompiler:
                 field = kws[0]
                 exported_fields.add(field)
 
-        return LTC(field_table=field_table, 
+        return LTC(field_table=namespace, 
                    namespace=namespace, 
                    checker_functions=checker_functions,
                    forbidden_cases=forbidden_cases,
