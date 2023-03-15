@@ -11,7 +11,7 @@ except ImportError:
     #LTC_DEFAULT_EXPORT_VALUE = '0'
     #LTC_DEFAULT_INPUT_VALUE = '0'
 
-VERSION = 0.5
+VERSION = "dev-NewSyntax0.1"
 RECOMPILATION_ATTEMPTS = 100
 
 class LTCMetadataManager:
@@ -32,45 +32,32 @@ class LTCFakeMetadata:
         pass
 
 class LTC:
-    def __init__(self, field_table, namespace, checker_functions, forbidden_cases,
-                 exporting_fields):
-        self.field_table = field_table
-        self.checker_functions = checker_functions
-        self.forbidden_cases = forbidden_cases
+    def __init__(self, namespace, checks, constrains,
+                 exporting_fields, expected_inputs):
         self.namespace = namespace
         self.exporting_fields = exporting_fields
-        self.known_input_fields = set()
+        self.checks = checks
+        self.constrains = constrains
         self.executed = False
-    
-    def feed_html(self, text):
-        from bs4 import BeautifulSoup
-        soup = BeautifulSoup(text, features="html.parser")
-        for inp in soup.find_all('input'):
-            self.known_input_fields.add(inp.get('name'))
-
-    #def get_answer_fields(self):
-    #    return [x[0] for x in self.checker_functions]
+        self.expected_inputs = expected_inputs
     
     def mask_answer_dict(self, __dict):
-        return {key: __dict[key] for key in self.known_input_fields}
+        return {key[1:]: __dict[key[1:]] for key in self.expected_inputs}
 
     @classmethod
     def from_dict(cls, data):
         executed = True
-        namespace = {}
-        field_table = data['field_values']
-        checker_functions = []
-        forbidden_cases = []
+        namespace = data['namespace']
+        checks = []
+        constrains = []
         exporting_fields = set(data["exporting_fields"])
-        for checkerobj in data['checkers']:
+        for checkerobj in data['checks']:
             function = KEYWORD_TABLE[checkerobj['function']](*checkerobj['args'])
-            field = checkerobj['field']
-            checker_functions.append((field, function))
-        for checkerobj in data['forbidders']:
+            checks.append(function)
+        for checkerobj in data['constrains']:
             function = KEYWORD_TABLE[checkerobj['function']](*checkerobj['args'])
-            field = checkerobj['field']
-            forbidden_cases.append((field, function))
-        ltc = cls(field_table, namespace, checker_functions, forbidden_cases, exporting_fields)
+            constrains.append(function)
+        ltc = cls(namespace, checks, constrains, exporting_fields)
         ltc.executed = executed 
         return ltc
 
@@ -78,26 +65,26 @@ class LTC:
         INVERSE_TABLE = dict((v,k) for k,v in KEYWORD_TABLE.items())
         if not self.executed: self.execute()
         mainobj = {}
-        mainobj['field_values'] = self.field_table
-        mainobj['checkers'] = []
-        mainobj['forbidders'] = []
+        mainobj['namespace'] = self.namespace
+        mainobj['checks'] = []
+        mainobj['constrains'] = []
         mainobj['exporting_fields'] = list(self.exporting_fields)
-        for field, checker in self.checker_functions:
+        for checker in self.checks:
             checkerobj = {}
             checkerobj['function'] = INVERSE_TABLE[checker.__class__]
             checkerobj['args'] = checker.args
-            checkerobj['field'] = field
-            mainobj['checkers'].append(checkerobj)
-        for field, checker in self.forbidden_cases:
+            mainobj['checks'].append(checkerobj)
+        for checker in self.constrains:
             checkerobj = {}
             checkerobj['function'] = INVERSE_TABLE[checker.__class__]
             checkerobj['args'] = checker.args
-            checkerobj['field'] = field
-            mainobj['forbidders'].append(checkerobj)
+            mainobj['constrains'].append(checkerobj)
         return mainobj
     
-    def execute(self, extend_ns=None, metadata=None, timeout=RECOMPILATION_ATTEMPTS,
-                default_export_value='0',):
+    def execute(self, extend_ns=None, metadata=None, 
+                timeout=RECOMPILATION_ATTEMPTS,
+                default_export_value='0',
+                default_input_value='0'):
         try:
             if metadata is None:    
                 metadata = LTCFakeMetadata()
@@ -107,49 +94,49 @@ class LTC:
 
             if not timeout:
                 raise LTCError(f"LTC could not fit user forbidden cases conditions for {RECOMPILATION_ATTEMPTS} attempts of recompilation.")
-            new_field_table = {}
-            new_checker_functions = []
-            new_forbidden_cases = []
+            new_namespace = {}
+            new_checks = []
+            new_constrains = []
 
             for field in self.exporting_fields:
-                new_field_table[field] = default_export_value
-            for field in self.known_input_fields:
-                new_field_table[field] = default_export_value
+                new_namespace[field] = default_export_value
+            for field in self.expected_inputs:
+                new_namespace[field] = default_input_value
             
-            new_field_table.update(extend_ns)
+            new_namespace.update(extend_ns)
             
-            for key, value in self.field_table.items():
-                new_field_table[key] = value.compile(new_field_table, metadata)(ns=new_field_table)
-            for field, value in self.checker_functions:
-                new_checker_functions.append((field, value.compile(new_field_table, metadata)))
-            for field, value in self.forbidden_cases:
-                new_forbidden_cases.append((field, value.compile(new_field_table, metadata)))
+            for key, value in self.namespace.items():
+                new_namespace[key] = value.compile(new_namespace, metadata)(ns=new_namespace)
+            for value in self.checks:
+                new_checks.append(value.compile(new_namespace, metadata))
+            for value in self.constrains:
+                new_constrains.append(value.compile(new_namespace, metadata))
 
-            if not LTC.validate(new_field_table, new_checker_functions, new_forbidden_cases):
+            if not LTC.validate(new_namespace, new_checks, new_constrains):
                 return self.execute(extend_ns, metadata, timeout-1)
             
-            del self.field_table
-            del self.checker_functions
-            del self.forbidden_cases
-            self.field_table = new_field_table
-            self.checker_functions = new_checker_functions
-            self.forbidden_cases = new_forbidden_cases
+            del self.namespace
+            del self.checks
+            del self.constrains
+            self.namespace = new_namespace
+            self.checks = new_checks
+            self.constrains = new_constrains
             self.executed = True
         except Exception as e:
-            raise LTCExecutionError(str(e))
+            raise LTCExecutionError(e.__class__.__name__ + ': ' + str(e))
     
     @staticmethod
-    def validate(field_table, checker_functions, forbidden_cases):
+    def validate(namespace, checks, constrains):
         valid = True
-        for field, checker in forbidden_cases:
-            valid = valid and not checker(field_table[field])
+        for checker in constrains:
+            valid = valid and checker(namespace)
         return valid
 
     def check(self):
         try:
             valid = True
-            for field, checker in self.checker_functions:
-                valid = valid and checker(self.field_table[field])
+            for checker in self.checks:
+                valid = valid and checker(self.namespace)
             return valid
         except Exception as e: # <-- ПЛОХО ОЧЕНЬ ПЛОХО но работает
             return False
@@ -157,7 +144,7 @@ class LTC:
     
 
 class LTCCompiler:
-    def _typevalue(txt: str):
+    def _typevalue(txt: str, input_fields_pool=None):
         txt = txt.strip()
         if txt[-1] == txt[0] == '"':
             txt = txt.strip('"')
@@ -170,14 +157,16 @@ class LTCCompiler:
         elif txt[0] == '[' and txt[-1] == ']':
             args = txt[1:-1].split(',')
             args = LTCCompiler._combine_kws(args, ',')
-            args = [LTCCompiler._typevalue(arg) for arg in args]
+            args = [LTCCompiler._typevalue(arg, input_fields_pool) for arg in args]
             return LTCValue(args)
         elif '(' in txt and txt[-1] == ')':
-            return LTCCompiler._build_func(txt)
+            return LTCCompiler._build_func(txt, input_fields_pool)
         else:
+            if txt.startswith('$') and input_fields_pool is not None:
+                input_fields_pool.add(txt)
             return LTCAllias(txt)
 
-    def _build_func(txt):
+    def _build_func(txt, input_fields_pool=None):
         fname = txt[:txt.find('(')]
         try:
             func = KEYWORD_TABLE[fname]
@@ -185,7 +174,7 @@ class LTCCompiler:
             raise LTCCompileError('Unknown function ' + fname + '. Maybe you forgot to import it?')
         args = txt[txt.find('(') + 1:-1].split(',')
         args = LTCCompiler._combine_kws(args, ',')
-        fargs = [LTCCompiler._typevalue(arg) for arg in args]
+        fargs = [LTCCompiler._typevalue(arg, input_fields_pool) for arg in args]
 
         funcobj = func(*fargs)
         return funcobj
@@ -203,9 +192,7 @@ class LTCCompiler:
                 LTCCompiler._combine_kw(i, "'", "'", kws, joiner)
             elif '(' in kw:
                 LTCCompiler._combine_kw(i, '(', ')', kws, joiner)
-            
-        kws = [kw for kw in kws if kw]
-        return kws
+        return [kw for kw in kws if kw]
 
     def _combine_kw(origin, opener, closer, kws, joiner=' '):
         kw = kws[origin]
@@ -220,169 +207,68 @@ class LTCCompiler:
             ff += joiner + kws[i]
             kws[i] = None
         kws[origin] = ff
-
-    def compile(self, txt, 
-                use_equal_shortcut=True):
-        COMPILER_VERSION = 0.5
+    
+    def compile(self, source_lines_iter):
+        COMPILER_VERSION = "dev-NewSyntax0.1"
         if COMPILER_VERSION != VERSION:
             raise NotImplemented
-
+        
         namespace = {}
         exported_fields = set()
-        checker_functions = []
-        forbidden_cases = []
-        if txt[:9] == '[VERBAL]\n':
-            return self.compile_alt(txt[9:])
+        checks = []
+        constrains = []
+        expected_inputs = set()
 
-        code = txt.split('\n')
-
-        for line in code:
-            if '#' in line:
-                line = line[:line.find('#')]
-            line = line.strip()
-            if not line:
-                continue
-            if ':=' in line:
-                linemode = 'contain'
-                line = line.replace(':=', ' ')
-            elif '=' in line:
-                linemode = 'set'
-                line = line.replace('=', ' ')
-            elif line.startswith('\\'):
-                linemode = 'forbid'
-                line = line.lstrip('\\').strip().replace('?', ' ')
-            elif '?' in line:
-                linemode = 'check'
-                line = line.replace('?', ' ')
-            elif line.startswith('>'):
-                linemode = 'export_only'
-                line = line[1:]
-            else:
-                raise LTCCompileError('LTC line has no known operators: ' + line)
-            kws = LTCCompiler._combine_kws(line.strip().split())
-            if linemode == 'set':
-                try:
-                    field = kws[0]
-                    value = kws[1]
-                    value = LTCCompiler._typevalue(value)
-                    if field[0] == '>':
-                        field = field[1:].strip()
-                        exported_fields.add(field)
-
-                    namespace[field] = value
-                    if 'as' in kws:
-                        allias = kws[kws.index('as') + 1]
-                        namespace[allias] = value
-                except IndexError:
-                    raise LTCCompileError('Uncomplete operation: not enough keywords in ' + line)
-            elif linemode == 'check':
-                try:
-                    field = kws[0]
-                    function = LTCCompiler._build_func(kws[1])
-                    
-                    if not function._is_checker:
-                        if use_equal_shortcut:
-                            function = IsEqual(function)
-                        else:
-                            raise LTCCompileError(kws[1] + 'cannot be a Checker Function in: ' + line)
-                    checker_functions.append((field, function))
-                except IndexError:
-                    raise LTCCompileError('Uncomplete operation: not enough keywords in ' + line)
-            elif linemode == 'contain':
-                allias = kws[0]
-                value = kws[1]
-                value = LTCCompiler._typevalue(value)
-                namespace[allias] = value
-            elif linemode == 'forbid':
-                try:
-                    field = kws[0]
-                    function = LTCCompiler._build_func(kws[1])
-                    
-                    if not function._is_checker:
-                        if use_equal_shortcut:
-                            function = IsEqual(function)
-                        else:
-                            raise LTCCompileError(kws[1] + 'cannot be a Checker Function in: ' + line)
-                    forbidden_cases.append((field, function))
-                except IndexError:
-                    raise LTCCompileError('Uncomplete operation: not enough keywords in ' + line)
-            elif linemode == 'export_only':
-                field = kws[0]
-                exported_fields.add(field)
-
-        return LTC(field_table=namespace, 
-                   namespace=namespace, 
-                   checker_functions=checker_functions,
-                   forbidden_cases=forbidden_cases,
-                   exporting_fields=exported_fields)
-
-
-    def compile_alt(self, txt):
-        COMPILER_VERSION = 0.2
-        if COMPILER_VERSION != VERSION:
-            raise NotImplemented
-
-        namespace = {}
-        field_table = {}
-        checker_functions = []
-        code = txt.split('\n')
-        for line in code:
-            if '#' in line:
-                line = line[:line.find('#')]
-            line = line.strip()
-            if not line:
-                continue
-            kws = LTCCompiler._combine_kws(line.strip().split())
-            if kws[0] == 'set':
-                try: 
-                    if 'to' not in kws:
-                        raise LTCCompileError('Uncomplete operation: expected "to" keyword in ' + line)
-                    field = kws[1]
-                    value = kws[kws.index('to') + 1]
-                    value = LTCCompiler._typevalue(value)
-                    field_table[field] = value
-                    if 'as' in kws:
-                        allias = kws[kws.index('as') + 1]
-                        namespace[allias] = value
-                except IndexError:
-                    raise LTCCompileError('Uncomplete operation: not enough keywords in ' + line)
-            elif kws[0] == 'check':
-                try:
-                    if 'for' not in kws:
-                        raise LTCCompileError('Uncomplete operation: expected "for" keyword in ' + line)
-                    field = kws[1]
-                    checker_functions.append((field, LTCCompiler._build_func(kws[3])))
-                except IndexError:
-                    raise LTCCompileError('Uncomplete operation: not enough keywords in ' + line)
-            elif kws[0] == 'contain':
-                try: 
-                    if 'as' not in kws:
-                        raise LTCCompileError('Uncomplete operation: expected "as" keyword in ' + line)
-                    allias = kws[1]
-                    value = kws[kws.index('as') + 1]
-                    value = LTCCompiler._typevalue(value)
-                    namespace[allias] = value
-                except IndexError:
-                    raise LTCCompileError('Uncomplete operation: not enough keywords in ' + line)
+        def tokenize(line, lineop=None):
+            if lineop is not None:
+                line = line.replace(lineop, ' ')
+            return [token.strip()
+                    for token in LTCCompiler._combine_kws(line.split())]
             
-            else:
-                raise LTCCompileError('Unknown operation ' + kws[0])        
-
-        return LTC(field_table=field_table, 
-                   namespace=namespace, 
-                   checker_functions=checker_functions)
+        for i, line in enumerate(source_lines_iter):
+            if '#' in line:
+                line = line[:line.find('#')]
+            line = line.strip()
+            if not line:
+                continue
+            
+            try:
+                if '=' in line:
+                    tokens = tokenize(line, '=')
+                    if tokens[0] == 'export':
+                        tokens = tokens[1:]
+                        exported_fields.add(tokens[0])
+                    namespace[tokens[0]] = LTCCompiler._typevalue(tokens[1], expected_inputs)
+                    continue
+                
+                tokens = tokenize(line)
+                if tokens[0] == 'check':
+                    function = LTCCompiler._typevalue(tokens[1], expected_inputs)
+                    checks.append(function)
+                    continue
+                if tokens[0] == 'constrain':
+                    function = LTCCompiler._typevalue(tokens[1], expected_inputs)
+                    constrains.append(function)
+                    continue
+            except IndexError:
+                raise LTCCompileError(f'Not enough arguments on line {i}: {line}')
+            raise LTCCompileError(f'Could not recognize any known operations on line {i}: {line}')
+        
+        return LTC(namespace=namespace, 
+                   checks=checks,
+                   constrains=constrains,
+                   exporting_fields=exported_fields,
+                   expected_inputs=expected_inputs)
 
 
 
 if __name__ == '__main__':
     test = '''
 a = Rand10(0, 10)
-\\a?Equal(5)'''
+check Equal(a, 5)'''
 
     ltcc = LTCCompiler()
     
-    for _ in range(1000):
-        ltc = ltcc.compile(test)
+    for _ in range(100):
+        ltc = ltcc.compile(test.splitlines())
         ltc.execute()
-
-    raise   

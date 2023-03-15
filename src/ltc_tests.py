@@ -20,6 +20,7 @@ def test(name):
             except TestFailed as e:
                 print(f'[!] <Test {name}>' + '\t' + 'Test failed! ' + str(e))
             except Exception as e:
+                #raise e
                 print(f'[!] <Test {name}>' + '\t' + 'Runtime error occured: ' + type(e).__name__ + ': ' + str(e))
             else:
                 print(f'[ ] <Test {name}>' + '\t' + 'Test passed successfully!')
@@ -31,28 +32,28 @@ def test(name):
 def test1():
     string = '''
 a = 5
-input?Equal(a)'''
+check Equal($input, a)'''
 
     ltcc = LTCCompiler()
 
-    ltc = ltcc.compile(string)
-    ltc.execute(extend_ns={'input': 5})
-    
+    ltc = ltcc.compile(string.splitlines())
+    ltc.execute(extend_ns={'$input': 5})
+
     if not ltc.check():
         raise TestFailed('5')
     
-    ltc = ltcc.compile(string)
-    ltc.execute(extend_ns={'input': '5'})
+    ltc = ltcc.compile(string.splitlines())
+    ltc.execute(extend_ns={'$input': '5'})
     if not ltc.check():
         raise TestFailed("'5'")
     
-    ltc = ltcc.compile(string)
-    ltc.execute(extend_ns={'input': 10})
+    ltc = ltcc.compile(string.splitlines())
+    ltc.execute(extend_ns={'$input': 10})
     if ltc.check():
         raise TestFailed("10")
     
-    ltc = ltcc.compile(string)
-    ltc.execute(extend_ns={'input': "chunky"})
+    ltc = ltcc.compile(string.splitlines())
+    ltc.execute(extend_ns={'$input': "chunky"})
     if ltc.check():
         raise TestFailed("chunky")
 
@@ -61,7 +62,7 @@ def test2():
     string = '''
 a = Rand10(-20, 20)
 b = Rand10(-20, 20)
-input?Equal(Sum(a, b))'''
+check Equal($input, Sum(a, b))'''
 
     ltcc = LTCCompiler()
 
@@ -69,17 +70,23 @@ input?Equal(Sum(a, b))'''
     metadata.seed = 1
     metadata.salt = 214
     metadata.xor = 100
-    ltc = ltcc.compile(string)
+    ltc = ltcc.compile(string.splitlines())
     ltc.execute(metadata=metadata)
-    a, b = ltc.field_table['a'], ltc.field_table['b']
+    a, b = ltc.namespace['a'], ltc.namespace['b']
 
-    ltc = ltcc.compile(string)
-    ltc.execute(metadata=metadata, extend_ns={'input': a + b})
+    metadata = LTCMetadataManager()
+    metadata.seed = 1
+    metadata.salt = 214
+    metadata.xor = 100
+    ltc = ltcc.compile(string.splitlines())
+    ltc.execute(metadata=metadata, extend_ns={'$input': a + b})
+    print(ltc.namespace)
     if not ltc.check():
         raise TestFailed()
 
 @test('3 Shortcuts')
 def test3():
+    raise TestFailed("Deprecated feature")
     string = '''
 a = Rand10(-20, 20)
 b = Rand10(-20, 20)
@@ -104,39 +111,39 @@ input?Sum(a, b)'''
 def test4():
     string = '''
 a = [0, 1, 2, 3, 4, "[I'm no list, capiche?]", Reverse(['But', 'I', 'am!'])]
-input?Reverse(a)'''
+check Equal($input, Reverse(a))'''
 
     ltcc = LTCCompiler()
 
-    ltc = ltcc.compile(string)
+    ltc = ltcc.compile(string.splitlines())
 
     input = reversed([0, 1, 2, 3, 4, "[I'm no list, capiche?]", reversed(['But', 'I', 'am!'])])
 
-    ltc.execute(extend_ns={'input': input})
+    ltc.execute(extend_ns={'$input': input})
     correct = [0, 1, 2, 3, 4, "[I'm no list, capiche?]", list(reversed(['But', 'I', 'am!']))]
     
-    if not ltc.field_table['a'] == correct:
-        raise TestFailed('list is ' + str(ltc.field_table['a']) + ', should be ' + str(correct))
+    if not ltc.namespace['a'] == correct:
+        raise TestFailed('list is ' + str(ltc.namespace['a']) + ', should be ' + str(correct))
 
     if not ltc.check():
         raise TestFailed()
 
-@test('5 Forbidders 1')
+@test('5 Constrains 1')
 def test5():
     string = '''
 a = Rand10(0, 10)
-\\a?Equal(5)'''
+constrain NotEqual(a, 5)'''
 
     ltcc = LTCCompiler()
     
     for i in range(10000):
-        ltc = ltcc.compile(string)
+        ltc = ltcc.compile(string.splitlines())
         ltc.execute()
-        if ltc.field_table['a'] == 5:
+        if ltc.namespace['a'] == 5:
             raise TestFailed('a == 5')
     
 
-@test('6 Forbidders 2')
+@test('6 Constrains 2')
 def test6():
     ltcc = LTCCompiler()
     
@@ -144,15 +151,15 @@ def test6():
 a = 21
 b = Sum(a, a)
 
-\\b?NotEqual(42)'''
+constrain Equal(b, 42)'''
 
     ltcc = LTCCompiler()
 
-    ltc = ltcc.compile(string)
+    ltc = ltcc.compile(string.splitlines())
     ltc.execute()
     
     for i in range(10000):
-        if ltc.field_table['b'] != '42':
+        if ltc.namespace['b'] != '42':
             raise TestFailed('b != 42')
 
 @test('7 Tricky typing')
@@ -168,19 +175,19 @@ e = Sum(Sum(b, b), Sum(a, a))
 f = Multiply(c, 11)
 g = GenerateLine(2, a)
 
-inputa?Equal(c)
-inputc?Equal(d)
-inpute?Equal(21)
-inputg?Equal(f)
+check Equal(inputa, c)
+check Equal(inputc, d)
+check Equal(inpute, 21)
+check Equal(inputg, f)
 '''
-    ltc = ltcc.compile(string)
+    ltc = ltcc.compile(string.splitlines())
     input = {'inputa': 7,
              'inputc': 7,
              'inpute': 21,
              'inputg': 77,
             }
     ltc.execute(extend_ns=input)
-    ft = ltc.field_table
+    ft = ltc.namespace
     if not ltc.check():
         raise TestFailed(str(ft) + ' (must be )')
 
@@ -195,9 +202,9 @@ d = Substract(b, a)
 e = Power(a, b)
 
 """
-    ltc = ltcc.compile(string)
+    ltc = ltcc.compile(string.splitlines())
     ltc.execute()
-    ft = ltc.field_table
+    ft = ltc.namespace
     if ft['c'] != 2:
         raise TestFailed('Division')
     elif ft['d'] != -5:
@@ -216,10 +223,10 @@ c = Calc("0.1 + 0.02 + (3 / 1000)")
 
     ltcc = LTCCompiler()
 
-    ltc = ltcc.compile(string)
+    ltc = ltcc.compile(string.splitlines())
     ltc.execute()
     
-    a, b, c = ltc.field_table['a'], ltc.field_table['b'], ltc.field_table['c']
+    a, b, c = ltc.namespace['a'], ltc.namespace['b'], ltc.namespace['c']
     correct_a = 42 / 2 + (1 * 10)
     correct_b = (2*(9-12) ** 2) * 2
     correct_c = 0.1 + 0.02 + (3 / 1000)
@@ -237,10 +244,10 @@ a = Calc("42 / 2 + (-(1 * 10))")
 '''
     ltcc = LTCCompiler()
 
-    ltc = ltcc.compile(string)
+    ltc = ltcc.compile(string.splitlines())
     ltc.execute()
     
-    a = ltc.field_table['a']
+    a = ltc.namespace['a']
     correct_a = 42 / 2 + (-(1 * 10))
     if a != correct_a:
         raise TestFailed('A: ' + str(a) + ' instead of ' + str(correct_a))
@@ -267,14 +274,13 @@ def test11():
 def test12():
     string = '''
 a = 1
->b = 10
-c = 42
->c
->d
+export b = 10
+export c = 42
+export d = 'Default'
 '''
     ltcc = LTCCompiler()
 
-    ltc = ltcc.compile(string)
+    ltc = ltcc.compile(string.splitlines())
     ltc.execute()
     
     a = ltc.exporting_fields
