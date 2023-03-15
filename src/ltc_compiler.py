@@ -33,13 +33,13 @@ class LTCFakeMetadata:
 
 class LTC:
     def __init__(self, namespace, checks, constrains,
-                 exporting_fields):
+                 exporting_fields, expected_inputs):
         self.namespace = namespace
         self.exporting_fields = exporting_fields
         self.checks = checks
         self.constrains = constrains
-        self.known_input_fields = set()
         self.executed = False
+        self.expected_inputs = expected_inputs
     
     def feed_html(self, text):
         from bs4 import BeautifulSoup
@@ -51,7 +51,7 @@ class LTC:
     #    return [x[0] for x in self.checker_functions]
     
     def mask_answer_dict(self, __dict):
-        return {key: __dict[key] for key in self.known_input_fields}
+        return {key[1:]: __dict[key[1:]] for key in self.expected_inputs}
 
     @classmethod
     def from_dict(cls, data):
@@ -109,8 +109,8 @@ class LTC:
 
             for field in self.exporting_fields:
                 new_namespace[field] = default_export_value
-            for field in self.known_input_fields:
-                new_namespace['$' + field] = default_input_value
+            for field in self.expected_inputs:
+                new_namespace[field] = default_input_value
             
             new_namespace.update(extend_ns)
             
@@ -119,7 +119,7 @@ class LTC:
             for value in self.checks:
                 new_checks.append(value.compile(new_namespace, metadata))
             for value in self.constrains:
-                new_constrains.append((field, value.compile(new_namespace, metadata)))
+                new_constrains.append(value.compile(new_namespace, metadata))
 
             if not LTC.validate(new_namespace, new_checks, new_constrains):
                 return self.execute(extend_ns, metadata, timeout-1)
@@ -132,20 +132,20 @@ class LTC:
             self.constrains = new_constrains
             self.executed = True
         except Exception as e:
-            raise LTCExecutionError(str(e))
+            raise LTCExecutionError(e.__class__.__name__ + ': ' + str(e))
     
     @staticmethod
     def validate(namespace, checks, constrains):
         valid = True
         for checker in constrains:
-            valid = valid and checker()
+            valid = valid and checker(namespace)
         return valid
 
     def check(self):
         try:
             valid = True
             for checker in self.checks:
-                valid = valid and checker()
+                valid = valid and checker(self.namespace)
             return valid
         except Exception as e: # <-- ПЛОХО ОЧЕНЬ ПЛОХО но работает
             return False
@@ -153,7 +153,7 @@ class LTC:
     
 
 class LTCCompiler:
-    def _typevalue(txt: str):
+    def _typevalue(txt: str, input_fields_pool=None):
         txt = txt.strip()
         if txt[-1] == txt[0] == '"':
             txt = txt.strip('"')
@@ -166,14 +166,16 @@ class LTCCompiler:
         elif txt[0] == '[' and txt[-1] == ']':
             args = txt[1:-1].split(',')
             args = LTCCompiler._combine_kws(args, ',')
-            args = [LTCCompiler._typevalue(arg) for arg in args]
+            args = [LTCCompiler._typevalue(arg, input_fields_pool) for arg in args]
             return LTCValue(args)
         elif '(' in txt and txt[-1] == ')':
-            return LTCCompiler._build_func(txt)
+            return LTCCompiler._build_func(txt, input_fields_pool)
         else:
+            if txt.startswith('$') and input_fields_pool is not None:
+                input_fields_pool.add(txt)
             return LTCAllias(txt)
 
-    def _build_func(txt):
+    def _build_func(txt, input_fields_pool=None):
         fname = txt[:txt.find('(')]
         try:
             func = KEYWORD_TABLE[fname]
@@ -181,7 +183,7 @@ class LTCCompiler:
             raise LTCCompileError('Unknown function ' + fname + '. Maybe you forgot to import it?')
         args = txt[txt.find('(') + 1:-1].split(',')
         args = LTCCompiler._combine_kws(args, ',')
-        fargs = [LTCCompiler._typevalue(arg) for arg in args]
+        fargs = [LTCCompiler._typevalue(arg, input_fields_pool) for arg in args]
 
         funcobj = func(*fargs)
         return funcobj
@@ -224,6 +226,7 @@ class LTCCompiler:
         exported_fields = set()
         checks = []
         constrains = []
+        expected_inputs = set()
 
         def tokenize(line, lineop=None):
             if lineop is not None:
@@ -244,16 +247,16 @@ class LTCCompiler:
                     if tokens[0] == 'export':
                         tokens = tokens[1:]
                         exported_fields.add(tokens[0])
-                    namespace[tokens[0]] = LTCCompiler._typevalue(tokens[1])
+                    namespace[tokens[0]] = LTCCompiler._typevalue(tokens[1], expected_inputs)
                     continue
                 
                 tokens = tokenize(line)
                 if tokens[0] == 'check':
-                    function = LTCCompiler._typevalue(tokens[1])
+                    function = LTCCompiler._typevalue(tokens[1], expected_inputs)
                     checks.append(function)
                     continue
-                if tokens[0] == 'constain':
-                    function = LTCCompiler._typevalue(tokens[1])
+                if tokens[0] == 'constrain':
+                    function = LTCCompiler._typevalue(tokens[1], expected_inputs)
                     constrains.append(function)
                     continue
             except IndexError:
@@ -263,7 +266,8 @@ class LTCCompiler:
         return LTC(namespace=namespace, 
                    checks=checks,
                    constrains=constrains,
-                   exporting_fields=exported_fields)
+                   exporting_fields=exported_fields,
+                   expected_inputs=expected_inputs)
 
 
 

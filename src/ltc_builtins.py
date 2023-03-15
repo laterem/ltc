@@ -140,10 +140,10 @@ class QuadEquation(LTCFunction):
         out += ' = 0'
         return out
         
-class IsMetricEqual(LTCCheckerFunction):
-    expected_argsc = 2
-    def call(self, field):
-        return field.endswith(self.args[1]) and float(field.strip(self.args[1])) == self.args[0]
+class IsMetricEqual(LTCFunction):
+    expected_argsc = 3
+    def call(self):
+        return self.args[0].endswith(self.args[2]) and float(self.args[0].strip(self.args[2])) == self.args[1]
 
 class Sum(LTCFunction):
     expected_argsc = 2
@@ -190,45 +190,49 @@ class Calc(LTCFunction):
         string = self.args[0]
         return FormulaParser().eval(string)
 
-class IsEqual(LTCCheckerFunction):
-    expected_argsc = 1
-    def call(self, field):
+class IsEqual(LTCFunction):
+    expected_argsc = 2
+    def call(self):
         try:
-            if isinstance(self.args[0], list):
-                return sorted(field) == sorted(self.args[0])
+            if isinstance(self.args[1], list):
+                return sorted(self.args[0]) == sorted(self.args[1])
             try:
-                return float(field) == float(self.args[0])
+                return float(self.args[0]) == float(self.args[1])
             except ValueError:
-                return str(field) == str(self.args[0])
+                return str(self.args[0]) == str(self.args[1])
         except ValueError:
             return False
 
-class IsEqualSet(LTCCheckerFunction):
-    expected_argsc = 1
-    def call(self, field):
-        return set(self.args[0]) == set(field)
+class IsEqualSet(LTCFunction):
+    expected_argsc = 2
+    def call(self):
+        return set(self.args[1]) == set(self.args[0])
 
-class IsEqualText(LTCCheckerFunction):
-    expected_argsc = 1
-    def call(self, field):
-        return field.strip().lower().replace('ё', 'е') == str(self.args[0]).strip().lower().replace('ё', 'е')
+class IsEqualText(LTCFunction):
+    expected_argsc = 2
+    def call(self):
+        return self.args[0].strip().lower().replace('ё', 'е') == str(self.args[1]).strip().lower().replace('ё', 'е')
 
-class IsNotEqual(LTCCheckerFunction):
-    expected_argsc = 1
-    def call(self, field):
-        if isinstance(self.args[0], list):
-            return sorted(field) != sorted(self.args[0])
-        return field != self.args[0]
+class IsNotEqual(LTCFunction):
+    expected_argsc = 2
+    def call(self):
+        if isinstance(self.args[1], list):
+            return sorted(self.args[0]) != sorted(self.args[1])
+        try:
+            return float(self.args[0]) != float(self.args[1])
+        except ValueError:
+            return str(self.args[0]) != str(self.args[1])
 
-class IsReversed(LTCCheckerFunction):
-    expected_argsc = 1
-    def call(self, field):
-        return field == self.args[0][::-1]
 
-class Roots(LTCCheckerFunction):
-    expected_argsc = 4
-    def call(self, field):
-        a, b, c, accuracy = self.args
+class IsReversed(LTCFunction):
+    expected_argsc = 2
+    def call(self):
+        return self.args[0] == self.args[1][::-1]
+
+class Roots(LTCFunction):
+    expected_argsc = 5
+    def call(self):
+        field, a, b, c, accuracy = self.args
         try:
             inp = float(field)
         except ValueError:

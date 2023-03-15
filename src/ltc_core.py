@@ -53,12 +53,6 @@ class LTCFunction:
         new.metadata = metadata
         return new
 
-class LTCCheckerFunction(LTCFunction):
-    _is_checker = True
-
-    def __call__(self, field):
-        return self.call(field)
-
 class LTCValue(LTCFunction):
     expected_argsc = 1    
     def call(self):
