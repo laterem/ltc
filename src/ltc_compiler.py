@@ -11,7 +11,7 @@ except ImportError:
     #LTC_DEFAULT_EXPORT_VALUE = '0'
     #LTC_DEFAULT_INPUT_VALUE = '0'
 
-VERSION = "dev-NewSyntax0.1"
+VERSION = 1.0
 RECOMPILATION_ATTEMPTS = 100
 
 class LTCMetadataManager:
@@ -211,7 +211,7 @@ class LTCCompiler:
         kws[origin] = ff
     
     def compile(self, source_lines_iter):
-        COMPILER_VERSION = "dev-NewSyntax0.1"
+        COMPILER_VERSION = 1.0
         if COMPILER_VERSION != VERSION:
             raise NotImplemented
         

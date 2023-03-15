@@ -1,10 +1,10 @@
 from .formula_parser import FormulaParser, Operator
 try:
-    from ..ltc_core import LTCFunction, LTCCheckerFunction, register_function
+    from ..ltc_core import LTCFunction, register_function
 except ModuleNotFoundError:
-    from ltc_core import LTCFunction, LTCCheckerFunction, register_function
+    from ltc_core import LTCFunction, register_function
 except ImportError:
-    from ltc_core import LTCFunction, LTCCheckerFunction, register_function
+    from ltc_core import LTCFunction, register_function
     
 
 class BooleanParser(FormulaParser):
@@ -111,10 +111,10 @@ class EvalBoolean(LTCFunction):
         variables = list(func.variables)
         return func.calc({var: val for var, val in zip(sorted(variables), values)}) 
 
-class IsBooleanIdentical(LTCCheckerFunction):
-    expected_argsc = 1
-    def call(self, field):
-        bf1, = self.args
+class IsBooleanIdentical(LTCFunction):
+    expected_argsc = 2
+    def call(self):
+        field, bf1 = self.args
         bf1 = BooleanFormula(bf1)
         bf2 = BooleanFormula(field)
         if bf1.is_equal(bf2):
@@ -127,10 +127,11 @@ class BooleanFormulaOperators(LTCFunction):
         f, = self.args
         return [op.name for op in BooleanParser._collect_operators(f)]
 
-class IsBooleanFormulaOperators(LTCCheckerFunction):
-    expected_argsc = 1
-    def call(self, field):
-        ops = set(self.args[0])
+class IsBooleanFormulaOperators(LTCFunction):
+    expected_argsc = 2
+    def call(self):
+        field = self.args[0]
+        ops = set(self.args[1])
         return ops == set([op.name for op in BooleanParser._collect_operators(field)])
 
 register_function(BooleanFormulaOperators=BooleanFormulaOperators,
