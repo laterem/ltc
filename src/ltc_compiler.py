@@ -41,15 +41,6 @@ class LTC:
         self.executed = False
         self.expected_inputs = expected_inputs
     
-    def feed_html(self, text):
-        from bs4 import BeautifulSoup
-        soup = BeautifulSoup(text, features="html.parser")
-        for inp in soup.find_all('input'):
-            self.known_input_fields.add(inp.get('name'))
-
-    #def get_answer_fields(self):
-    #    return [x[0] for x in self.checker_functions]
-    
     def mask_answer_dict(self, __dict):
         return {key[1:]: __dict[key[1:]] for key in self.expected_inputs}
 
