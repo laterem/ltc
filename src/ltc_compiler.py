@@ -51,13 +51,14 @@ class LTC:
         checks = []
         constrains = []
         exporting_fields = set(data["exporting_fields"])
+        expected_inputs = set(data["expected_inputs"])
         for checkerobj in data['checks']:
             function = KEYWORD_TABLE[checkerobj['function']](*checkerobj['args'])
             checks.append(function)
         for checkerobj in data['constrains']:
             function = KEYWORD_TABLE[checkerobj['function']](*checkerobj['args'])
             constrains.append(function)
-        ltc = cls(namespace, checks, constrains, exporting_fields)
+        ltc = cls(namespace, checks, constrains, exporting_fields, expected_inputs)
         ltc.executed = executed 
         return ltc
 
@@ -69,6 +70,7 @@ class LTC:
         mainobj['checks'] = []
         mainobj['constrains'] = []
         mainobj['exporting_fields'] = list(self.exporting_fields)
+        mainobj['expected_inputs'] = list(self.expected_inputs)
         for checker in self.checks:
             checkerobj = {}
             checkerobj['function'] = INVERSE_TABLE[checker.__class__]
