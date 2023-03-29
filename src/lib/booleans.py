@@ -1,17 +1,21 @@
 from .formula_parser import FormulaParser, Operator
+
 try:
     from ..ltc_core import LTCFunction, register_function
 except ModuleNotFoundError:
     from ltc_core import LTCFunction, register_function
 except ImportError:
     from ltc_core import LTCFunction, register_function
-    
+
+import random
+
 
 class BooleanParser(FormulaParser):
-    operators = {'|': Operator(0, lambda a, b: a or b, name='OR'), 
-                 '&': Operator(1, lambda a, b: a and b, name='AND'), 
-                 '!': Operator(2, lambda a: not a, arity=1, name='NOT')
-                 }
+    operators = {
+        "|": Operator(0, lambda a, b: a or b, name="OR"),
+        "&": Operator(1, lambda a, b: a and b, name="AND"),
+        "!": Operator(2, lambda a: not a, arity=1, name="NOT"),
+    }
 
     @staticmethod
     def object_convert(string, variables):
@@ -30,20 +34,21 @@ class BooleanParser(FormulaParser):
 
     @staticmethod
     def object_identification(symbol, carry):
-        VARIABLE = 'abcdefghijklmnopqrstuvwxyz'
+        VARIABLE = "abcdefghijklmnopqrstuvwxyz"
         VARIABLE += VARIABLE.upper()
-        NUMBER = '10' 
+        NUMBER = "10"
         if symbol in VARIABLE:
             return True
         if symbol in NUMBER:
             return True
         return False
 
+
 class BooleanFormula:
     def __init__(self, string):
         self.string = string
         self.variables = BooleanParser._collect_variables(string)
-    
+
     def __str__(self):
         return self.string
 
@@ -59,22 +64,24 @@ class BooleanFormula:
             except KeyError:
                 return False
         return True
-    
+
     def operators(self, string=False):
         if string:
-            return [op.name for op in BooleanParser._collect_operators(self.string)]
+            return [
+                op.name for op in BooleanParser._collect_operators(self.string)
+            ]
         return BooleanParser._collect_operators(self.string)
 
     def truth_table(self):
         variables = list(self.variables)
         tt = {}
         intrep = 0
-        final = int('1' * len(variables), 2) + 1
+        final = int("1" * len(variables), 2) + 1
         while intrep != final:
             prompt = {}
             intrepp = intrep
             for variable in self.variables:
-                prompt[variable] = (intrepp % 2)
+                prompt[variable] = intrepp % 2
                 intrepp //= 2
             result = self.calc(**prompt)
             tt[tuple([prompt[var] for var in variables])] = result
@@ -83,10 +90,10 @@ class BooleanFormula:
 
     def is_equal(self, other):
         volume = len(self.variables)
-        #if len(other.variables) != volume:
+        # if len(other.variables) != volume:
         #    return False
         variables = 0
-        final = int('1' * volume, 2) + 1
+        final = int("1" * volume, 2) + 1
         while variables != final:
             prompt = {}
             intrepp = variables
@@ -103,16 +110,22 @@ class BooleanFormula:
 
 # LTC Функции для работы с булевыми формулами
 
+
 class EvalBoolean(LTCFunction):
     expected_argsc = 2
+
     def call(self):
         func, values = self.args
         func = BooleanFormula(func)
         variables = list(func.variables)
-        return func.calc({var: val for var, val in zip(sorted(variables), values)}) 
+        return func.calc(
+            {var: val for var, val in zip(sorted(variables), values)}
+        )
+
 
 class IsBooleanIdentical(LTCFunction):
     expected_argsc = 2
+
     def call(self):
         field, bf1 = self.args
         bf1 = BooleanFormula(bf1)
@@ -121,20 +134,65 @@ class IsBooleanIdentical(LTCFunction):
             return True
         return False
 
+
 class BooleanFormulaOperators(LTCFunction):
     expected_argsc = 1
+
     def call(self):
-        f, = self.args
+        (f,) = self.args
         return [op.name for op in BooleanParser._collect_operators(f)]
+
 
 class IsBooleanFormulaOperators(LTCFunction):
     expected_argsc = 2
+
     def call(self):
         field = self.args[0]
         ops = set(self.args[1])
-        return ops == set([op.name for op in BooleanParser._collect_operators(field)])
+        return ops == set(
+            [op.name for op in BooleanParser._collect_operators(field)]
+        )
 
-register_function(BooleanFormulaOperators=BooleanFormulaOperators,
-                  IsBooleanIdentical=IsBooleanIdentical,
-                  IsBooleanFormulaOperators=IsBooleanFormulaOperators,
-                  EvalBoolean=EvalBoolean)
+
+class RandomBooleanFormula(LTCFunction):
+    expected_argsc = 0
+
+    def call(self):
+        inputs = "abcd"
+        unary_operations = ("!", "", "")
+        binary_operations = ("&", "|")
+
+        def random_arg(depth=0):
+            # random.seed(self.metadata.seed)
+            # self.metadata.tick_seed()
+            if depth >= 2:
+                return random.choice(unary_operations) + random.choice(inputs)
+            if depth > 0 and random.randint(0, 3) == 3:
+                return random.choice(unary_operations) + random.choice(inputs)
+            return (
+                random.choice(binary_operations),
+                random_arg(depth=depth + 1),
+                random_arg(depth=depth + 1),
+            )
+
+        op_tree = random_arg()
+
+        def concat_tree(tree, parenthesis=False):
+            if isinstance(tree, str):
+                return tree
+            content = tree[0].join(
+                map(lambda x: concat_tree(x, True), tree[1:])
+            )
+            if parenthesis:
+                return f"({content})"
+            return content
+
+        return concat_tree(op_tree)
+
+
+register_function(
+    BooleanFormulaOperators=BooleanFormulaOperators,
+    IsBooleanIdentical=IsBooleanIdentical,
+    IsBooleanFormulaOperators=IsBooleanFormulaOperators,
+    EvalBoolean=EvalBoolean,
+)
