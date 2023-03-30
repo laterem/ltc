@@ -206,7 +206,7 @@ class VariablesInFormula(LTCFunction):
     def call(self):
         func = self.args[0]
         parser = BooleanParser()
-        return parser._collect_variables(func)
+        return parser._collect_variables(func) + ['F']
 
 register_function(
     BooleanFormulaOperators=BooleanFormulaOperators,
@@ -214,5 +214,6 @@ register_function(
     IsBooleanFormulaOperators=IsBooleanFormulaOperators,
     EvalBoolean=EvalBoolean,
     RandomBooleanFormula=RandomBooleanFormula,
-    TruthTable=TruthTable
+    TruthTable=TruthTable,
+    VariablesInFormula=VariablesInFormula
 )
