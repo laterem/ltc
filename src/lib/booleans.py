@@ -164,8 +164,8 @@ class RandomBooleanFormula(LTCFunction):
         binary_operations = ("&", "|")
 
         def random_arg(depth=0):
-            # random.seed(self.metadata.seed)
-            # self.metadata.tick_seed()
+            random.seed(self.metadata.seed)
+            self.metadata.tick_seed()
             if depth >= 2:
                 return random.choice(unary_operations) + random.choice(inputs)
             if depth > 0 and random.randint(0, 3) == 3:
@@ -200,6 +200,13 @@ class TruthTable(LTCFunction):
         tt = parsed.truth_table()
         return [''.join(map(str, key)) for key, value in tt.items() if value]
 
+class VariablesInFormula(LTCFunction):
+    expected_argsc = 1
+
+    def call(self):
+        func = self.args[0]
+        parser = BooleanParser()
+        return parser._collect_variables(func)
 
 register_function(
     BooleanFormulaOperators=BooleanFormulaOperators,
