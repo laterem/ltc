@@ -72,7 +72,7 @@ class FormulaParser:
 
     @classmethod
     def _collect_variables(cls, formula_string):
-        return cls._collect_info(formula_string)[0]
+        return sorted(cls._collect_info(formula_string)[0])
     
     @classmethod
     def _collect_operators(cls, formula_string):
@@ -166,7 +166,8 @@ class FormulaParser:
         for token in polish:
             if token in cls.operators: 
                 oper = cls.operators[token]
-                args = [cls.object_convert(stack.pop(), variables) for _ in range(oper.arity)]
+                args = [cls.object_convert(stack.pop(), variables) 
+                        for _ in range(oper.arity)]
                 stack.append(oper(*reversed(args))) 
             else:
                 stack.append(token)
@@ -174,8 +175,10 @@ class FormulaParser:
 
     def eval(self, string, variables=NotSpecified):
         ps = self.polish_stack(string)
+        #if variables is NotSpecified:
+         #   variables = self._collect_variables(string)
         return self._calc(ps,
                           variables=variables)
-    
+
     def polish_stack(self, string):
         return self._polish(self._raw_parse(string))

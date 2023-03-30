@@ -57,6 +57,7 @@ class BooleanFormula:
         return bp.eval(self.string, variables)
 
     def is_equal_tt(self, tt):
+        return NotImplemented
         for key, value in self.tt.items():
             try:
                 if tt[key] != value:
@@ -190,9 +191,21 @@ class RandomBooleanFormula(LTCFunction):
         return concat_tree(op_tree)
 
 
+class TruthTable(LTCFunction):
+    expected_argsc = 1
+
+    def call(self):
+        func = self.args[0]
+        parsed = BooleanFormula(func)
+        tt = parsed.truth_table()
+        return [''.join(map(str, key)) for key, value in tt.items() if value]
+
+
 register_function(
     BooleanFormulaOperators=BooleanFormulaOperators,
     IsBooleanIdentical=IsBooleanIdentical,
     IsBooleanFormulaOperators=IsBooleanFormulaOperators,
     EvalBoolean=EvalBoolean,
+    RandomBooleanFormula=RandomBooleanFormula,
+    TruthTable=TruthTable
 )

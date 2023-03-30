@@ -23,7 +23,6 @@ def test(name):
             except TestFailed as e:
                 print(f"[!] <Test {name}>" + "\t" + "Test failed! " + str(e))
             except Exception as e:
-                # raise e
                 print(
                     f"[!] <Test {name}>"
                     + "\t"
@@ -350,6 +349,14 @@ def test13():
     for i in range(10):
         func = RandomBooleanFormula().compile({}, metadata)
         print(func({}))
+
+
+@test("14 Formula truth table showcase")
+def test14():
+    from lib.booleans import TruthTable
+
+    func = TruthTable('a|b').call()
+    print(func)
 
 
 if __name__ == "__main__":
